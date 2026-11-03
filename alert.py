@@ -10,7 +10,8 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
 KST = timezone(timedelta(hours=9))
 API = "https://oapi.saramin.co.kr/job-search"
@@ -19,9 +20,11 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
 VIEW = "https://www.saramin.co.kr/zf_user/jobs/relay/view"
 DETAIL = "https://www.saramin.co.kr/zf_user/jobs/relay/view-detail"
 DETAIL_MAX = 60  # 한 번에 본문을 읽을 공고 수 (신규 먼저, 남으면 기존 공고 순차 보충)
-WEB_LOCS ="106000,110040,110100,110150,110053,110055,110057,110059,110130"  # 부산, 김해, 양산, 창원(구 포함)
+WEB_LOCS = "106000,110040,110100,110150,110053,110055,110057,110059,110130"  # 부산, 김해, 양산, 창원(구 포함)
 STATE = Path("jobs.json")
 XLSX = Path("jobs.xlsx")
+HTML = Path("jobs.html")
+TEMPLATE = Path(__file__).with_name("template.html")
 
 REGIONS = ("106000", "110000")  # 부산 전체, 경남 전체 → CITIES로 좁힘
 CITIES = ("부산", "창원", "마산", "진해", "김해", "양산")
@@ -41,7 +44,10 @@ RULES = [  # (찾을 단어, 점수, 근거 표시)
 ]
 LISTED_WORDS = ("상장", "코스닥", "코스피", "ipo")
 BODY_WORDS = [w for words, p, _ in RULES if p > 0 for w in words] + list(LISTED_WORDS)  # 본문에선 가산 단어만 본다
-HEADERS = ["상태", "점수", "점수 근거", "회사명", "공고 제목", "지역", "경력", "연봉", "마감일", "최초 발견일", "링크"]
+COLS = [("상태", 8), ("점수", 7), ("회사명", 24), ("공고 제목", 54), ("지역", 22), ("경력", 13),
+        ("연봉", 15), ("마감일", 12), ("D-day", 8), ("발견일", 11), ("점수 근거", 60)]  # (머리글, 폭)
+CENTER = {1, 2, 8, 9, 10}  # 가운데 정렬할 열 번호
+TIERS = [(8, "C6EFCE", "006100"), (4, "E2EFDA", "375623"), (1, "FFF2CC", "7F6000")]  # (최소 점수, 배경, 글자)
 
 
 def fetch(key, **extra):
@@ -174,22 +180,75 @@ def make_row(j, pts, why, page_salary=""):
     }
 
 
-def write_xlsx(state):
+def ordered(state):
+    """진행중 먼저, 점수 높은 순, 같은 점수면 마감 빠른 순."""
+    return sorted(state.values(), key=lambda r: (r["status"] != "진행중", -r["score"], r["deadline_ts"] or 9e9))
+
+
+def label(r, now):
+    return "마감" if r["status"] != "진행중" else "신규" if r["first_seen"] == f"{now:%Y-%m-%d}" else "진행중"
+
+
+def dday(r, now):
+    if r["status"] != "진행중":
+        return "마감"
+    if not r["deadline_ts"]:
+        return "-"
+    d = (datetime.fromtimestamp(r["deadline_ts"], KST).date() - now.date()).days
+    return "D-day" if d == 0 else f"D-{d}"
+
+
+def write_xlsx(state, now):
     wb = Workbook()
     ws = wb.active
     ws.title = "공고"
-    ws.append(HEADERS)
-    for r in sorted(state.values(), key=lambda r: (r["status"] != "진행중", -r["score"])):
-        ws.append([r["status"], r["score"], r["why"], r["company"], r["title"], r["location"],
-                   r["experience"], r["salary"], r["deadline"], r["first_seen"], r["url"]])
-        ws.cell(ws.max_row, 11).hyperlink = r["url"]
-    for col, width in zip("ABCDEFGHIJK", (7, 6, 30, 22, 50, 22, 14, 18, 12, 12, 40)):
-        ws.column_dimensions[col].width = width
+    ws.append([name for name, _ in COLS])
+    gray, red = Font(color="A6A6A6"), Font(color="C00000", bold=True)
+    for r in ordered(state):
+        st, dd = label(r, now), dday(r, now)
+        ws.append([st, r["score"], r["company"], r["title"], r["location"], r["experience"],
+                   r["salary"], r["deadline"], dd, r["first_seen"], r["why"]])
+        row = ws[ws.max_row]
+        ws.row_dimensions[ws.max_row].height = 20
+        for c in row:
+            c.alignment = Alignment(vertical="center", horizontal="center" if c.column in CENTER else "left")
+        row[3].hyperlink = r["url"]
+        if st == "마감":
+            for c in row:
+                c.font = gray
+            continue
+        row[3].font = Font(color="1F4E79", underline="single")
+        tier = next((t for t in TIERS if r["score"] >= t[0]), None)
+        if tier:
+            row[1].fill = PatternFill("solid", fgColor=tier[1])
+            row[1].font = Font(color=tier[2], bold=True)
+        if st == "신규":
+            row[0].font = red
+        if dd == "D-day" or dd.startswith("D-") and int(dd[2:]) <= 3:
+            row[8].font = red
+    for i, (_, width) in enumerate(COLS, 1):
+        ws.column_dimensions[ws.cell(1, i).column_letter].width = width
     for c in ws[1]:
-        c.font = Font(bold=True)
-    ws.freeze_panes = "A2"
-    ws.auto_filter.ref = ws.dimensions
+        c.fill = PatternFill("solid", fgColor="1F3864")
+        c.font = Font(color="FFFFFF", bold=True)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 26
+    ws.freeze_panes = "D2"  # 머리글 + 상태·점수·회사명 고정
+    ws.add_table(Table(displayName="Jobs", ref=ws.dimensions,
+                       tableStyleInfo=TableStyleInfo(name="TableStyleLight1", showRowStripes=True)))
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
     wb.save(XLSX)
+
+
+def write_html(state, now):
+    """필터·검색이 되는 한 장짜리 리포트. 외부 파일 없이 텔레그램에서 바로 열린다."""
+    data = [{"s": label(r, now), "p": r["score"], "c": r["company"], "t": r["title"], "u": r["url"],
+             "l": r["location"], "e": r["experience"], "m": r["salary"], "d": r["deadline"],
+             "dd": dday(r, now), "w": r["why"]} for r in ordered(state)]
+    page = TEMPLATE.read_text("utf-8").replace("__UPDATED__", f"{now:%Y.%m.%d %H:%M}")
+    HTML.write_text(page.replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/")), "utf-8")
 
 
 def line(r):
@@ -217,9 +276,10 @@ def send(text, attach=True):
         "chat_id": chat, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}).raise_for_status()
     if not attach:
         return
-    with XLSX.open("rb") as f:
-        requests.post(f"{base}/sendDocument", timeout=60, data={"chat_id": chat},
-                      files={"document": (XLSX.name, f)}).raise_for_status()
+    for path in (HTML, XLSX):
+        with path.open("rb") as f:
+            requests.post(f"{base}/sendDocument", timeout=60, data={"chat_id": chat},
+                          files={"document": (path.name, f)}).raise_for_status()
 
 
 def main():
@@ -261,7 +321,8 @@ def main():
         if jid not in alive:
             rec["status"] = "마감"
     STATE.write_text(json.dumps(state, ensure_ascii=False, indent=1), "utf-8")
-    write_xlsx(state)
+    write_xlsx(state, now)
+    write_html(state, now)
     send(message(new, soon, now))
 
 

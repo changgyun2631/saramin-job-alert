@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>회계 공고 리포트</title>
+<style>
+:root {
+  --bg: #f4f5f7; --card: #ffffff; --ink: #1a1d23; --muted: #6b7280; --line: #e5e7eb;
+  --accent: #1f3864; --link: #1f4e79; --urgent: #c00000; --chip: #f1f3f6;
+  --t1-bg: #d7f5df; --t1: #0a6b2c; --t2-bg: #e6f2e8; --t2: #2f6b3d;
+  --t3-bg: #fff4cc; --t3: #7a5b00; --t0-bg: #eef0f3; --t0: #7c8494;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111318; --card: #1a1d24; --ink: #e8eaee; --muted: #9aa1ad; --line: #2b2f38;
+    --accent: #8fb0ea; --link: #9cc3f5; --urgent: #ff7b72; --chip: #242833;
+    --t1-bg: #123d22; --t1: #7ee2a0; --t2-bg: #1d3324; --t2: #a9d8b5;
+    --t3-bg: #3a3112; --t3: #f0cf6b; --t0-bg: #23262e; --t0: #8a919d;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
+.wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+header h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+header p { margin: 4px 0 16px; color: var(--muted); font-size: 13px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 12px; }
+.stat.hot b { color: var(--urgent); }
+.controls { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 10px 0;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); }
+.controls input[type=search] { flex: 1 1 220px; min-width: 0; padding: 9px 12px; font: inherit; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.seg { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 8px 11px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed=true] { background: var(--accent); color: var(--card); font-weight: 600; }
+.controls label { font-size: 13px; color: var(--muted); display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.count { margin-left: auto; font-size: 13px; color: var(--muted); }
+#list { display: grid; gap: 10px; margin-top: 14px; }
+.card { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 14px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.card.closed { opacity: .5; }
+.score { border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 22px; font-variant-numeric: tabular-nums; height: 56px; }
+.score small { font-size: 10px; font-weight: 500; opacity: .8; }
+.t1 { background: var(--t1-bg); color: var(--t1); } .t2 { background: var(--t2-bg); color: var(--t2); }
+.t3 { background: var(--t3-bg); color: var(--t3); } .t0 { background: var(--t0-bg); color: var(--t0); }
+.top { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.badge { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: var(--urgent); color: #fff; }
+.title { display: block; margin: 2px 0 8px; color: var(--link); font-weight: 600; font-size: 16px;
+  text-decoration: none; overflow-wrap: anywhere; }
+.title:hover { text-decoration: underline; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
+.meta .due.urgent { color: var(--urgent); font-weight: 700; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--ink); }
+.tag.neg { color: var(--urgent); }
+.empty { text-align: center; color: var(--muted); padding: 40px 0; }
+@media (max-width: 600px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .card { grid-template-columns: 46px minmax(0, 1fr); gap: 10px; padding: 12px; }
+  .score { height: 46px; font-size: 18px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>회계 공고 리포트</h1>
+    <p>부산 · 창원 · 양산 · 김해 / 회계·세무·재무 정규직 · __UPDATED__ 기준</p>
+  </header>
+  <div class="stats">
+    <div class="stat"><b id="s-open">0</b><span>진행중</span></div>
+    <div class="stat hot"><b id="s-new">0</b><span>오늘 신규</span></div>
+    <div class="stat hot"><b id="s-due">0</b><span>마감 D-3 이내</span></div>
+    <div class="stat"><b id="s-top">0</b><span>8점 이상</span></div>
+  </div>
+  <div class="controls">
+    <input type="search" id="q" placeholder="회사명, 제목, 지역, 점수 근거 검색" aria-label="검색">
+    <div class="seg" role="group" aria-label="최소 점수">
+      <button data-min="-99" aria-pressed="false">전체</button>
+      <button data-min="1" aria-pressed="true">1점↑</button>
+      <button data-min="5" aria-pressed="false">5점↑</button>
+      <button data-min="8" aria-pressed="false">8점↑</button>
+    </div>
+    <label><input type="checkbox" id="only-new"> 신규만</label>
+    <label><input type="checkbox" id="closed"> 마감 포함</label>
+    <span class="count" id="count"></span>
+  </div>
+  <div id="list"></div>
+</div>
+<script>
+const DATA = __DATA__;
+let min = 1;
+const $ = s => document.querySelector(s);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const tier = p => p >= 8 ? "t1" : p >= 4 ? "t2" : p >= 1 ? "t3" : "t0";
+const urgent = dd => dd === "D-day" || /^D-[0-3]$/.test(dd);
+
+function card(r) {
+  const a = el("article", "card" + (r.s === "마감" ? " closed" : ""));
+  const sc = el("div", "score " + tier(r.p), r.p); sc.append(el("small", null, "점"));
+  const body = el("div");
+  const top = el("div", "top", r.c);
+  if (r.s === "신규") top.append(el("span", "badge", "NEW"));
+  const t = el("a", "title", r.t); t.href = r.u; t.target = "_blank"; t.rel = "noopener";
+  const meta = el("div", "meta");
+  for (const v of [r.l, r.e, r.m]) if (v) meta.append(el("span", null, v));
+  meta.append(el("span", "due" + (urgent(r.dd) ? " urgent" : ""), r.dd === "-" ? r.d : `${r.d} · ${r.dd}`));
+  const tags = el("div", "tags");
+  for (const w of r.w ? r.w.split(", ") : []) tags.append(el("span", "tag" + (w.includes("-") ? " neg" : ""), w.replace(/([+-]\d+)$/, " $1")));
+  body.append(top, t, meta, tags);
+  a.append(sc, body);
+  return a;
+}
+
+function render() {
+  const q = $("#q").value.trim().toLowerCase(), onlyNew = $("#only-new").checked, closed = $("#closed").checked;
+  const rows = DATA.filter(r => r.p >= min && (closed || r.s !== "마감") && (!onlyNew || r.s === "신규")
+    && (!q || `${r.c} ${r.t} ${r.l} ${r.w}`.toLowerCase().includes(q)));
+  $("#list").replaceChildren(...(rows.length ? rows.map(card) : [el("p", "empty", "조건에 맞는 공고가 없습니다")]));
+  $("#count").textContent = `${rows.length}건`;
+}
+
+const open = DATA.filter(r => r.s !== "마감");
+$("#s-open").textContent = open.length;
+$("#s-new").textContent = open.filter(r => r.s === "신규").length;
+$("#s-due").textContent = open.filter(r => urgent(r.dd)).length;
+$("#s-top").textContent = open.filter(r => r.p >= 8).length;
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  min = +b.dataset.min; render();
+});
+$("#q").oninput = $("#only-new").onchange = $("#closed").onchange = render;
+render();
+</script>
+</body>
+</html>

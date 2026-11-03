@@ -71,7 +71,7 @@ def demo():
     alert.main()
     alert.main()
     assert "마감임박 1건" in sent[1] and "오늘 신규 없음" in sent[2], sent[1:]
-    assert alert.XLSX.exists()
+    assert alert.XLSX.exists() and "원가회계·연결결산 과장" in alert.HTML.read_text("utf-8")
     print("OK", os.getcwd())
 
 
