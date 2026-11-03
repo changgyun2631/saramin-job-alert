@@ -28,7 +28,19 @@ JOBS = {
 }
 
 
+ITEM = """<div class="item_recruit" value="99"><h2 class="job_tit"><a title="원가회계 과장"></a></h2>
+<div class="job_date"><span class="date">~ 01/08(목)</span></div>
+<div class="job_condition"><span><a>경남</a> <a>김해시</a></span> <span>경력 3~5년</span> <span>정규직</span></div>
+<div class="job_sector"><a>원가회계</a>, <a>결산</a></div><strong class="corp_name"><a> (주)가나 </a></strong></div>"""
+
+
 def demo():
+    it = alert.BeautifulSoup(ITEM, "html.parser").div
+    j = alert.parse_item(it, today=alert.datetime(2026, 12, 20, tzinfo=alert.KST))
+    assert j["company"]["detail"]["name"] == "(주)가나" and j["position"]["location"]["name"] == "경남 김해시", j
+    assert (j["position"]["experience-level"]["min"], j["position"]["experience-level"]["max"]) == (3, 5)
+    assert alert.make_row(j, 0, [])["deadline"] == "2027-01-08"  # 해 넘김
+
     os.chdir(tempfile.mkdtemp())
     os.environ["SARAMIN_KEY"] = "fake"
     os.environ.pop("TELEGRAM_TOKEN", None)

@@ -2,15 +2,21 @@
 import html
 import json
 import os
+import re
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
+from bs4 import BeautifulSoup
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
 KST = timezone(timedelta(hours=9))
 API = "https://oapi.saramin.co.kr/job-search"
+WEB = "https://www.saramin.co.kr/zf_user/search/recruit"
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"}
+WEB_LOCS = "106000,110040,110100,110150,110053,110055,110057,110059,110130"  # 부산, 김해, 양산, 창원(구 포함)
 STATE = Path("jobs.json")
 XLSX = Path("jobs.xlsx")
 
@@ -51,6 +57,57 @@ def fetch(key, **extra):
             if start * 110 >= int(data["total"]):
                 break
     return jobs
+
+
+def fetch_web():
+    """API 키가 없을 때: 사람인 검색 화면에서 같은 조건(회계·세무·재무, 정규직) 공고를 읽는다."""
+    # ponytail: 화면 구조가 바뀌면 깨짐 → API 키 받으면 SARAMIN_KEY 등록으로 자동 전환
+    jobs = {}
+    for page in range(1, 21):
+        r = requests.get(WEB, headers=UA, timeout=30, params={
+            "searchType": "search", "searchword": "", "loc_cd": WEB_LOCS, "cat_mcls": "3",
+            "job_type": "1", "recruitPageCount": "100", "recruitPage": page})
+        r.raise_for_status()
+        items = BeautifulSoup(r.text, "html.parser").select("div.item_recruit")
+        for it in items:
+            j = parse_item(it)
+            jobs[j["id"]] = j
+        if len(items) < 100:
+            break
+        time.sleep(2)
+    if not jobs:
+        raise RuntimeError("사람인 검색 결과 0건: 화면 구조가 바뀌었거나 접속이 막혔을 수 있음")
+    return jobs
+
+
+def parse_item(it, today=None):
+    """검색 결과 한 칸을 API 응답과 같은 모양으로 바꾼다."""
+    today = today or datetime.now(KST)
+    rid = it["value"]
+    cond = [s.get_text(" ", strip=True) for s in it.select("div.job_condition > span")] + ["", ""]
+    loc, exp = cond[0], cond[1]
+    nums = [int(n) for n in re.findall(r"\d+", exp)]
+    lo = nums[0] if nums else 0
+    hi = nums[1] if "~" in exp and len(nums) > 1 else 0
+    date = it.select_one("div.job_date .date").get_text(strip=True)
+    m = re.search(r"(\d+)/(\d+)", date)
+    due = None
+    if m:
+        due = today.replace(month=int(m[1]), day=int(m[2]), hour=23, minute=59)
+        if due < today - timedelta(days=1):  # 12월에 본 1월 마감 → 내년
+            due = due.replace(year=due.year + 1)
+    elif "오늘" in date or "내일" in date:
+        due = today.replace(hour=23, minute=59) + timedelta(days="내일" in date)
+    sector = it.select_one("div.job_sector")
+    return {
+        "id": rid, "url": f"https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx={rid}",
+        "company": {"detail": {"name": it.select_one(".corp_name").get_text(strip=True)}},
+        "position": {"title": it.select_one(".job_tit a")["title"], "location": {"name": loc},
+                     "experience-level": {"code": 1 if exp == "신입" else 2, "min": lo, "max": hi, "name": exp}},
+        "keyword": ", ".join(a.get_text(strip=True) for a in sector.select("a")) if sector else "",
+        "expiration-timestamp": int(due.timestamp()) if due else 0,
+        "close-type": {"code": "1" if due else "2", "name": date},
+    }
 
 
 def text_of(j):
@@ -150,11 +207,14 @@ def send(text):
 
 
 def main():
-    key = os.environ["SARAMIN_KEY"]
+    key = os.environ.get("SARAMIN_KEY")
     now = datetime.now(KST)
     state = json.loads(STATE.read_text("utf-8")) if STATE.exists() else {}
-    jobs = fetch(key)
-    listed = set(fetch(key, stock="kosdaq")) | set(fetch(key, stock="kospi"))
+    if key:
+        jobs = fetch(key)
+        listed = set(fetch(key, stock="kosdaq")) | set(fetch(key, stock="kospi"))
+    else:  # 검색 화면에는 업종·상장 정보가 없어 단어로만 판단
+        jobs, listed = fetch_web(), set()
     new, soon, alive = [], [], set()
     for jid, j in jobs.items():
         if not in_area(j) or excluded(j):
