@@ -13,7 +13,7 @@ def job(jid, title, company="(주)테스트", loc="부산 &gt; 사상구", kw=""
         "position": {"title": title, "location": {"name": loc}, "industry": {"name": "금속·주조"},
                      "job-code": {"name": "회계"},
                      "experience-level": {"code": code, "min": lo, "max": hi, "name": f"경력 {lo}년↑"}},
-        "keyword": kw, "salary": {"name": "회사내규에 따름"},
+        "keyword": kw, "salary": {"name": ""},  # 웹 수집처럼 연봉 없음 → 상세 페이지 값 사용
         "expiration-timestamp": str(int(time.time()) + days * 86400), "close-type": {"code": "1", "name": "접수마감일"},
     }
 
@@ -25,6 +25,8 @@ JOBS = {
     "4": job(4, "회계 파견직 모집"),                       # 파견 제외
     "5": job(5, "재무회계 차장", loc="경남 &gt; 거제시"),  # 지역 제외
     "6": job(6, "회계 대리", loc="경남 &gt; 김해시", days=2),
+    "7": job(7, "회계 담당", lo=2),                         # 경력2년↑ 저연차
+    "8": job(8, "회계 감사 보조", company="회계법인공감"),  # 회계법인 제외
 }
 
 
@@ -46,9 +48,11 @@ def demo():
     os.environ.pop("TELEGRAM_TOKEN", None)
     alert.fetch = lambda key, **extra: {} if extra else {k: v for k, v in JOBS.items() if k != "6"}
 
+    alert.fetch_detail = lambda jid: {"body_words": "원가" if jid == "6" else "", "page_salary": "연봉 5,000만원"}
     alert.main()
     state = alert.json.loads(alert.STATE.read_text("utf-8"))
-    assert set(state) == {"1", "2"}, state.keys()
+    assert set(state) == {"1", "2", "7"}, state.keys()
+    assert state["7"]["score"] == 2 - 2 and state["7"]["salary"] == "연봉 5,000만원", state["7"]
     assert state["1"]["score"] == 3 + 3 + 2 + 2 + 1 + 2 + 2, state["1"]  # 원가 연결 결산 조선·기계 ERP 직급 경력10년↑
     assert state["2"]["score"] == 2 - 2 - 2, state["2"]                  # 조선·기계(업종) 경리 저연차
 
@@ -59,6 +63,7 @@ def demo():
     alert.main()
     state = alert.json.loads(alert.STATE.read_text("utf-8"))
     assert state["2"]["status"] == "마감" and state["6"]["status"] == "진행중"
+    assert state["6"]["score"] == 2 + 3, state["6"]  # 조선·기계 + 본문 원가
     assert "신규 1건 · 마감임박 0건" in sent[0], sent[0]
 
     # 셋째 날: 1번 마감이 D-2로 당겨짐 → D-3 재알림 1회, 넷째 날엔 다시 안 옴
