@@ -10,6 +10,7 @@
   --accent: #1f3864; --link: #1f4e79; --urgent: #c00000; --chip: #f1f3f6;
   --t1-bg: #d7f5df; --t1: #0a6b2c; --t2-bg: #e6f2e8; --t2: #2f6b3d;
   --t3-bg: #fff4cc; --t3: #7a5b00; --t0-bg: #eef0f3; --t0: #7c8494;
+  --seen: #7b3fb0; --seen-bg: #f1e8fb;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -17,6 +18,7 @@
     --accent: #8fb0ea; --link: #9cc3f5; --urgent: #ff7b72; --chip: #242833;
     --t1-bg: #123d22; --t1: #7ee2a0; --t2-bg: #1d3324; --t2: #a9d8b5;
     --t3-bg: #3a3112; --t3: #f0cf6b; --t0-bg: #23262e; --t0: #8a919d;
+    --seen: #c9a2f2; --seen-bg: #2e2340;
   }
 }
 * { box-sizing: border-box; }
@@ -48,7 +50,10 @@ header p { margin: 4px 0 16px; color: var(--muted); font-size: 13px; }
 .score small { font-size: 10px; font-weight: 500; opacity: .8; }
 .t1 { background: var(--t1-bg); color: var(--t1); } .t2 { background: var(--t2-bg); color: var(--t2); }
 .t3 { background: var(--t3-bg); color: var(--t3); } .t0 { background: var(--t0-bg); color: var(--t0); }
-.top { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.corp { font-size: 15px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
+.card.seen .corp, .card.seen .title, .title:visited { color: var(--seen); }
+.seen-count { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 6px; background: var(--seen-bg); color: var(--seen); }
 .badge { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: var(--urgent); color: #fff; }
 .title { display: block; margin: 2px 0 8px; color: var(--link); font-weight: 600; font-size: 16px;
   text-decoration: none; overflow-wrap: anywhere; }
@@ -100,13 +105,34 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 const tier = p => p >= 8 ? "t1" : p >= 4 ? "t2" : p >= 1 ? "t3" : "t0";
 const urgent = dd => dd === "D-day" || /^D-[0-3]$/.test(dd);
 
+// 열람 횟수: 이 브라우저에만 저장된다 (다른 기기·브라우저와는 따로 셈)
+const KEY = "saramin-clicks";
+let clicks = {};
+try { clicks = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+
+function mark(a, r) {
+  const n = clicks[r.u] || 0;
+  a.classList.toggle("seen", n > 0);
+  a.querySelector(".seen-count")?.remove();
+  if (n) a.querySelector(".top").append(el("span", "seen-count", `열람 ${n}회`));
+}
+
 function card(r) {
   const a = el("article", "card" + (r.s === "마감" ? " closed" : ""));
   const sc = el("div", "score " + tier(r.p), r.p); sc.append(el("small", null, "점"));
   const body = el("div");
-  const top = el("div", "top", r.c);
+  const top = el("div", "top");
+  top.append(el("span", "corp", r.c));
   if (r.s === "신규") top.append(el("span", "badge", "NEW"));
   const t = el("a", "title", r.t); t.href = r.u; t.target = "_blank"; t.rel = "noopener";
+  const count = e => {
+    if (e.type === "auxclick" && e.button !== 1) return;  // 휠 클릭만
+    clicks[r.u] = (clicks[r.u] || 0) + 1;
+    try { localStorage.setItem(KEY, JSON.stringify(clicks)); } catch (err) {}
+    mark(a, r);
+  };
+  t.addEventListener("click", count);
+  t.addEventListener("auxclick", count);
   const meta = el("div", "meta");
   for (const v of [r.l, r.e, r.m]) if (v) meta.append(el("span", null, v));
   meta.append(el("span", "due" + (urgent(r.dd) ? " urgent" : ""), r.dd === "-" ? r.d : `${r.d} · ${r.dd}`));
@@ -114,6 +140,7 @@ function card(r) {
   for (const w of r.w ? r.w.split(", ") : []) tags.append(el("span", "tag" + (w.includes("-") ? " neg" : ""), w.replace(/([+-]\d+)$/, " $1")));
   body.append(top, t, meta, tags);
   a.append(sc, body);
+  mark(a, r);
   return a;
 }
 
