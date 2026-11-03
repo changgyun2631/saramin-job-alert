@@ -1,7 +1,8 @@
 # 사람인 회계 공고 알림
 
 평일 오전 8시, 사람인에서 부산·창원·양산·김해 회계 정규직 공고를 모아 점수순으로 텔레그램(`@cg_job_bot`)에 보냅니다.
-메시지에는 신규 상위 10건과 마감 D-3 재알림이 들어가고, 누적 엑셀(`jobs.xlsx`)이 함께 첨부됩니다.
+메시지에는 신규 상위 10건, 마감 D-3 재알림, 리포트 링크가 들어가고, 누적 엑셀(`jobs.xlsx`)이 함께 첨부됩니다.
+리포트: https://changgyun2631.github.io/saramin-job-alert/jobs.html (GitHub Pages, 열람 기록은 브라우저별 저장)
 
 ## 설정 순서
 
@@ -16,7 +17,7 @@ API 키가 없으면 사람인 검색 화면에서 같은 조건의 공고를 �
    |---|---|
    | `SARAMIN_KEY` | 사람인 access-key |
    | `TELEGRAM_TOKEN` | BotFather 새 토큰 |
-   | `TELEGRAM_CHAT_ID` | `5349036142` |
+   | `TELEGRAM_CHAT_ID` | 봇 getUpdates로 확인한 채팅 ID |
 4. 저장소 **Actions → daily → Run workflow**로 첫 실행을 합니다. 텔레그램 메시지가 오면 완료입니다.
 
 ## 조정

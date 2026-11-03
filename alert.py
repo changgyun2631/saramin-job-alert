@@ -24,6 +24,7 @@ WEB_LOCS = "106000,110040,110100,110150,110053,110055,110057,110059,110130"  # �
 STATE = Path("jobs.json")
 XLSX = Path("jobs.xlsx")
 HTML = Path("jobs.html")
+REPORT_URL = "https://changgyun2631.github.io/saramin-job-alert/jobs.html"  # GitHub Pages 고정 주소 → 열람 기록 유지
 TEMPLATE = Path(__file__).with_name("template.html")
 
 REGIONS = ("106000", "110000")  # 부산 전체, 경남 전체 → CITIES로 좁힘
@@ -257,7 +258,8 @@ def line(r):
 
 
 def message(new, soon, now):
-    lines = [f"<b>사람인 회계 공고 {now:%m/%d}</b>", f"신규 {len(new)}건 · 마감임박 {len(soon)}건"]
+    lines = [f"<b>사람인 회계 공고 {now:%m/%d}</b>", f"신규 {len(new)}건 · 마감임박 {len(soon)}건",
+             f'<a href="{REPORT_URL}">📊 전체 리포트 열기</a>']
     if not new and not soon:
         lines.append("오늘 신규 없음")
     for title, items in (("신규 상위 10", new), ("마감 D-3", soon)):
@@ -276,10 +278,9 @@ def send(text, attach=True):
         "chat_id": chat, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}).raise_for_status()
     if not attach:
         return
-    for path in (HTML, XLSX):
-        with path.open("rb") as f:
-            requests.post(f"{base}/sendDocument", timeout=60, data={"chat_id": chat},
-                          files={"document": (path.name, f)}).raise_for_status()
+    with XLSX.open("rb") as f:  # HTML은 파일 대신 고정 주소 링크로 (파일은 매일 열람 기록이 초기화됨)
+        requests.post(f"{base}/sendDocument", timeout=60, data={"chat_id": chat},
+                      files={"document": (XLSX.name, f)}).raise_for_status()
 
 
 def main():
