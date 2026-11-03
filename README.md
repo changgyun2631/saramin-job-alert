@@ -5,7 +5,9 @@
 
 ## 설정 순서
 
-1. **사람인 API 키 신청**: https://oapi.saramin.co.kr
+API 키가 없으면 사람인 검색 화면에서 같은 조건의 공고를 읽어옵니다. 그래서 텔레그램 Secrets 두 개만 등록하면 바로 동작합니다.
+
+1. **사람인 API 키 신청** (선택. 키를 등록하면 업종과 상장사 정보까지 반영됩니다): https://oapi.saramin.co.kr
    - API 사용할 곳 URL: `https://github.com/changgyun2631/saramin-job-alert`
    - 용도: 개인 구직용 채용공고 조회
 2. **GitHub 비공개 저장소** `saramin-job-alert`에 이 폴더를 올립니다.

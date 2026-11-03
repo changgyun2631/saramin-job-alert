@@ -207,6 +207,8 @@ def send(text):
 
 
 def main():
+    if os.environ.get("CI") and not os.environ.get("TELEGRAM_TOKEN"):  # 못 보낸 공고를 '본 공고'로 저장하지 않게
+        raise SystemExit("TELEGRAM_TOKEN Secret이 등록되지 않았습니다")
     key = os.environ.get("SARAMIN_KEY")
     now = datetime.now(KST)
     state = json.loads(STATE.read_text("utf-8")) if STATE.exists() else {}
