@@ -194,7 +194,7 @@ def message(new, soon, now):
 
 
 def send(text):
-    token, chat = os.environ.get("TELEGRAM_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    token, chat = (os.environ.get(k, "").strip() for k in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID"))  # 붙여넣기 공백·줄바꿈 제거
     if not token:  # 로컬 점검용: 보내지 않고 출력만
         print(text)
         return
