@@ -3,7 +3,9 @@ import html
 import json
 import os
 import re
+import smtplib
 import time
+from email.message import EmailMessage
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -268,6 +270,23 @@ def message(new, soon, now):
     return "\n".join(lines)
 
 
+def send_mail(text, attach=True):
+    """네이버 메일로 같은 내용을 보낸다. NAVER_USER·NAVER_PASSWORD(앱 비밀번호)가 없으면 건너뛴다."""
+    user, pw = (os.environ.get(k, "").strip() for k in ("NAVER_USER", "NAVER_PASSWORD"))
+    if not (user and pw):
+        return
+    msg = EmailMessage()
+    msg["Subject"] = text.split("\n")[0].replace("<b>", "").replace("</b>", "")
+    msg["From"] = msg["To"] = f"{user}@naver.com"
+    msg.set_content(re.sub(r"<[^>]+>", "", text))
+    msg.add_alternative(f'<div style="font:14px/1.6 sans-serif">{text.replace(chr(10), "<br>")}</div>', subtype="html")
+    if attach:
+        msg.add_attachment(XLSX.read_bytes(), maintype="application", subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=XLSX.name)
+    with smtplib.SMTP_SSL("smtp.naver.com", 465, timeout=30) as s:
+        s.login(user, pw)
+        s.send_message(msg)
+
+
 def send(text, attach=True):
     token, chat = (os.environ.get(k, "").strip() for k in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID"))  # 붙여넣기 공백·줄바꿈 제거
     if not token:  # 로컬 점검용: 보내지 않고 출력만
@@ -324,7 +343,9 @@ def main():
     STATE.write_text(json.dumps(state, ensure_ascii=False, indent=1), "utf-8")
     write_xlsx(state, now)
     write_html(state, now)
-    send(message(new, soon, now))
+    text = message(new, soon, now)
+    send(text)
+    send_mail(text)
 
 
 if __name__ == "__main__":

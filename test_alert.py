@@ -72,6 +72,22 @@ def demo():
     alert.main()
     assert "마감임박 1건" in sent[1] and "오늘 신규 없음" in sent[2], sent[1:]
     assert alert.XLSX.exists() and "원가회계·연결결산 과장" in alert.HTML.read_text("utf-8")
+    # 네이버 메일: Secret 없으면 건너뛰고, 있으면 본인에게 xlsx 첨부로 보낸다
+    class FakeSMTP:
+        sent = []
+        def __init__(self, host, port, timeout): assert (host, port) == ("smtp.naver.com", 465)
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def login(self, u, p): assert (u, p) == ("me", "app-pw")
+        def send_message(self, m): FakeSMTP.sent.append(m)
+    alert.smtplib.SMTP_SSL = FakeSMTP
+    alert.send_mail("<b>사람인 회계 공고 11/05</b>\n신규 0건")
+    assert not FakeSMTP.sent
+    os.environ.update(NAVER_USER="me", NAVER_PASSWORD="app-pw")
+    alert.send_mail("<b>사람인 회계 공고 11/05</b>\n신규 0건")
+    m = FakeSMTP.sent[0]
+    assert m["To"] == "me@naver.com" and m["Subject"] == "사람인 회계 공고 11/05"
+    assert [p.get_filename() for p in m.iter_attachments()] == ["jobs.xlsx"]
     print("OK", os.getcwd())
 
 

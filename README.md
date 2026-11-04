@@ -18,6 +18,7 @@ API 키가 없으면 사람인 검색 화면에서 같은 조건의 공고를 �
    | `SARAMIN_KEY` | 사람인 access-key |
    | `TELEGRAM_TOKEN` | BotFather 새 토큰 |
    | `TELEGRAM_CHAT_ID` | 봇 getUpdates로 확인한 채팅 ID |
+   - (선택) 네이버 메일로도 받으려면 `NAVER_USER`(네이버 아이디, @naver.com 제외)와 `NAVER_PASSWORD`(앱 비밀번호)를 추가합니다. 네이버 메일 환경설정 → POP3/SMTP 설정에서 **IMAP/SMTP 사용**을 켜야 합니다.
 4. 저장소 **Actions → daily → Run workflow**로 첫 실행을 합니다. 텔레그램 메시지가 오면 완료입니다.
 
 ## 조정
