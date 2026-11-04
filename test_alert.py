@@ -72,21 +72,21 @@ def demo():
     alert.main()
     assert "마감임박 1건" in sent[1] and "오늘 신규 없음" in sent[2], sent[1:]
     assert alert.XLSX.exists() and "원가회계·연결결산 과장" in alert.HTML.read_text("utf-8")
-    # 네이버 메일: Secret 없으면 건너뛰고, 있으면 본인에게 xlsx 첨부로 보낸다
+    # 메일: Secret 없으면 건너뛰고, 있으면 Gmail로 보내 받는 주소에 xlsx 첨부로 전달한다
     class FakeSMTP:
         sent = []
-        def __init__(self, host, port, timeout): assert (host, port) == ("smtp.naver.com", 465)
+        def __init__(self, host, port, timeout): assert (host, port) == ("smtp.gmail.com", 465)
         def __enter__(self): return self
         def __exit__(self, *a): pass
-        def login(self, u, p): assert (u, p) == ("me", "app-pw")
+        def login(self, u, p): assert (u, p) == ("me@gmail.com", "apppw")  # 공백 제거 확인
         def send_message(self, m): FakeSMTP.sent.append(m)
     alert.smtplib.SMTP_SSL = FakeSMTP
     alert.send_mail("<b>사람인 회계 공고 11/05</b>\n신규 0건")
     assert not FakeSMTP.sent
-    os.environ.update(NAVER_USER="me", NAVER_PASSWORD="app-pw")
+    os.environ.update(MAIL_USER="me@gmail.com", MAIL_PASSWORD="app pw", MAIL_TO="you@naver.com")
     alert.send_mail("<b>사람인 회계 공고 11/05</b>\n신규 0건")
     m = FakeSMTP.sent[0]
-    assert m["To"] == "me@naver.com" and m["Subject"] == "사람인 회계 공고 11/05"
+    assert m["From"] == "me@gmail.com" and m["To"] == "you@naver.com" and m["Subject"] == "사람인 회계 공고 11/05"
     assert [p.get_filename() for p in m.iter_attachments()] == ["jobs.xlsx"]
     # 메일 로그인 실패여도 실행은 끝까지 가고(본 공고 저장), 텔레그램으로 알린다
     FakeSMTP.login = lambda self, u, p: (_ for _ in ()).throw(alert.smtplib.SMTPAuthenticationError(535, b"bad"))

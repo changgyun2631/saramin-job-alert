@@ -271,19 +271,20 @@ def message(new, soon, now):
 
 
 def send_mail(text, attach=True):
-    """네이버 메일로 같은 내용을 보낸다. NAVER_USER·NAVER_PASSWORD(앱 비밀번호)가 없으면 건너뛴다."""
-    user, pw = (os.environ.get(k, "").strip() for k in ("NAVER_USER", "NAVER_PASSWORD"))
+    """같은 내용을 메일로 보낸다(stock 프로젝트와 같은 방식: Gmail 앱 비밀번호로 보내고 네이버로 받음).
+    MAIL_USER·MAIL_PASSWORD가 없으면 건너뛴다. 네이버로 직접 보내면 2단계 인증 때문에 로그인이 거부된다."""
+    user, pw, to = (os.environ.get(k, "").strip() for k in ("MAIL_USER", "MAIL_PASSWORD", "MAIL_TO"))
     if not (user and pw):
         return
     msg = EmailMessage()
     msg["Subject"] = text.split("\n")[0].replace("<b>", "").replace("</b>", "")
-    msg["From"] = msg["To"] = f"{user}@naver.com"
+    msg["From"], msg["To"] = user, to or user
     msg.set_content(re.sub(r"<[^>]+>", "", text))
     msg.add_alternative(f'<div style="font:14px/1.6 sans-serif">{text.replace(chr(10), "<br>")}</div>', subtype="html")
     if attach:
         msg.add_attachment(XLSX.read_bytes(), maintype="application", subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=XLSX.name)
-    with smtplib.SMTP_SSL("smtp.naver.com", 465, timeout=30) as s:
-        s.login(user, pw)
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
+        s.login(user, pw.replace(" ", ""))  # 구글 앱 비밀번호는 'abcd efgh ...'로 보여 공백째 붙여넣기 쉽다
         s.send_message(msg)
 
 
@@ -348,7 +349,7 @@ def main():
     try:
         send_mail(text)
     except Exception as e:  # 메일 문제로 '본 공고' 저장이 막히지 않게 텔레그램으로만 알린다
-        send(f"⚠️ 네이버 메일 발송 실패 (텔레그램은 정상)\n{html.escape(f'{type(e).__name__}: {e}')[:300]}", attach=False)
+        send(f"⚠️ 메일 발송 실패 (텔레그램은 정상)\n{html.escape(f'{type(e).__name__}: {e}')[:300]}", attach=False)
 
 
 if __name__ == "__main__":
