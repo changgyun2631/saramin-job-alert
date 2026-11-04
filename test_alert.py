@@ -88,6 +88,12 @@ def demo():
     m = FakeSMTP.sent[0]
     assert m["To"] == "me@naver.com" and m["Subject"] == "사람인 회계 공고 11/05"
     assert [p.get_filename() for p in m.iter_attachments()] == ["jobs.xlsx"]
+    # 메일 로그인 실패여도 실행은 끝까지 가고(본 공고 저장), 텔레그램으로 알린다
+    FakeSMTP.login = lambda self, u, p: (_ for _ in ()).throw(alert.smtplib.SMTPAuthenticationError(535, b"bad"))
+    sent.clear()
+    alert.send = lambda text, attach=True: sent.append(text)
+    alert.main()
+    assert any("메일 발송 실패" in s for s in sent), sent
     print("OK", os.getcwd())
 
 

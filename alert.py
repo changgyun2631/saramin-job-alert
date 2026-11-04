@@ -345,7 +345,10 @@ def main():
     write_html(state, now)
     text = message(new, soon, now)
     send(text)
-    send_mail(text)
+    try:
+        send_mail(text)
+    except Exception as e:  # 메일 문제로 '본 공고' 저장이 막히지 않게 텔레그램으로만 알린다
+        send(f"⚠️ 네이버 메일 발송 실패 (텔레그램은 정상)\n{html.escape(f'{type(e).__name__}: {e}')[:300]}", attach=False)
 
 
 if __name__ == "__main__":
