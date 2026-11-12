@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -50,6 +52,8 @@ BODY_WORDS = [w for words, p, _ in RULES if p > 0 for w in words] + list(LISTED_
 COLS = [("상태", 8), ("점수", 7), ("회사명", 24), ("공고 제목", 54), ("지역", 22), ("경력", 13),
         ("연봉", 15), ("마감일", 12), ("D-day", 8), ("발견일", 11), ("점수 근거", 60)]  # (머리글, 폭)
 CENTER = {1, 2, 8, 9, 10}  # 가운데 정렬할 열 번호
+HTTP = requests.Session()  # 사람인 접속이 가끔 끊김 → 재시도 (대기 0·20·40·80·160초)
+HTTP.mount("https://", HTTPAdapter(max_retries=Retry(total=5, backoff_factor=10, status_forcelist=(429, 500, 502, 503, 504))))
 TIERS = [(8, "C6EFCE", "006100"), (4, "E2EFDA", "375623"), (1, "FFF2CC", "7F6000")]  # (최소 점수, 배경, 글자)
 
 
@@ -59,7 +63,7 @@ def fetch(key, **extra):
     for loc in REGIONS:
         start = 0
         while True:
-            r = requests.get(API, headers={"Accept": "application/json"}, timeout=30, params={
+            r = HTTP.get(API, headers={"Accept": "application/json"}, timeout=30, params={
                 "access-key": key, "loc_cd": loc, "job_mid_cd": "3", "job_type": "1",
                 "sr": "directhire", "count": 110, "start": start, **extra})
             r.raise_for_status()
@@ -77,7 +81,7 @@ def fetch_web():
     # ponytail: 화면 구조가 바뀌면 깨짐 → API 키 받으면 SARAMIN_KEY 등록으로 자동 전환
     jobs = {}
     for page in range(1, 21):
-        r = requests.get(WEB, headers=UA, timeout=30, params={
+        r = HTTP.get(WEB, headers=UA, timeout=30, params={
             "searchType": "search", "searchword": "", "loc_cd": WEB_LOCS, "cat_mcls": "3",
             "job_type": "1", "recruitPageCount": "100", "recruitPage": page})
         r.raise_for_status()
@@ -125,8 +129,8 @@ def parse_item(it, today=None):
 
 def fetch_detail(jid):
     """공고 본문에서 가산 단어를, 공고 페이지 요약에서 연봉을 뽑는다. 본문 전체는 저장하지 않는다."""
-    body = requests.get(DETAIL, headers=UA, timeout=30, params={"rec_idx": jid, "rec_seq": 0})
-    page = requests.get(VIEW, headers=UA, timeout=30, params={"rec_idx": jid})
+    body = HTTP.get(DETAIL, headers=UA, timeout=30, params={"rec_idx": jid, "rec_seq": 0})
+    page = HTTP.get(VIEW, headers=UA, timeout=30, params={"rec_idx": jid})
     body.raise_for_status()
     text = BeautifulSoup(body.text, "html.parser").get_text(" ").lower()
     m = re.search(r'연봉:(.*?)(?:, [가-힣]+:|")|(면접 후 결정|회사내규에 따름)', page.text)
